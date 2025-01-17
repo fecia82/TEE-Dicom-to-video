@@ -5,15 +5,18 @@ import os
 import zipfile
 import tempfile
 import uuid
+import shutil
 import pydicom
 import numpy as np
 import cv2
 from PIL import Image
-from flask import Flask, request, send_file, render_template, redirect, url_for
+from flask import Flask, request, send_file, render_template
 from flask_socketio import SocketIO, emit, join_room
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
+
 socketio = SocketIO(app, async_mode='eventlet')
 
 def crear_directorio_temp():
@@ -125,6 +128,12 @@ def procesar_zip(zip_path, output_zip_path, session_id):
     except Exception as e:
         print(f"Error procesando el zip: {e}")
         socketio.emit('finished', {'filename': None}, room=session_id)
+    finally:
+        # Limpiar directorios temporales
+        if os.path.exists(carpeta_temp):
+            shutil.rmtree(carpeta_temp)
+        if os.path.exists(carpeta_salida):
+            shutil.rmtree(carpeta_salida)
 
 @app.route("/", methods=["GET"])
 def index():
@@ -187,4 +196,5 @@ def handle_start_processing(data):
         emit('error', {'message': 'No se proporcionó un session_id.'})
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    socketio.run(app, debug=True, host='0.0.0.0', port=port)
